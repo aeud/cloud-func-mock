@@ -1,4 +1,4 @@
-# Fivetran Google Cloud Function connector
+# Fivetran Google Cloud Function Mock
 
 ## Introduction
 
