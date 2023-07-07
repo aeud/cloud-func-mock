@@ -18,7 +18,7 @@ var (
 	agent              string
 	authorizationToken string
 	output             string
-	secrets            map[string]string
+	secrets            map[string]interface{}
 	secretsStr         string
 	state              State
 	stateStr           string
@@ -61,10 +61,10 @@ func (r *Response) LogInsertions() string {
 }
 
 type Request struct {
-	Agent     string            `json:"agent"`
-	State     State             `json:"state"`
-	Secrets   map[string]string `json:"secrets"`
-	SetupTest bool              `json:"setup_test,omitempty"`
+	Agent     string                 `json:"agent"`
+	State     State                  `json:"state"`
+	Secrets   map[string]interface{} `json:"secrets"`
+	SetupTest bool                   `json:"setup_test,omitempty"`
 }
 
 func NewRequest() *Request {
