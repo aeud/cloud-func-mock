@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,17 +19,67 @@ var (
 	agent              string
 	authorizationToken string
 	output             string
+	callPath           string
+	sessionPath        string
 	secrets            map[string]interface{}
 	secretsStr         string
 	state              State
 	stateStr           string
 	testSetup          bool
+	sessionID          string
+	callID             string
 )
+
+func WriteState(state *State) {
+	file, _ := os.Create(fmt.Sprintf("%s/state.json", sessionPath))
+	file.Write(state.MarshalIndent())
+	file.Close()
+}
+func ReadState() State {
+	var s State
+	file, _ := os.Open(fmt.Sprintf("%s/state.json", sessionPath))
+	if err := json.NewDecoder(file).Decode(&s); err != nil {
+		log.Println("Cannot read the state. Initializing to {}.")
+		return NewState()
+	}
+	file.Close()
+	return s
+}
+
+type CustomWriter struct {
+	fileNumber int
+	mut        *sync.Mutex
+}
+
+func (c *CustomWriter) Write(bs []byte) (int, error) {
+	c.mut.Lock()
+	c.Increment()
+	file, err := os.Create(fmt.Sprintf("%s/log_%04d_%d.json", callPath, c.fileNumber, time.Now().Unix()))
+	if err != nil {
+		log.Fatalln(err)
+	}
+	c.mut.Unlock()
+	defer file.Close()
+	return file.Write(bs)
+}
+func (c *CustomWriter) Increment() {
+	c.fileNumber++
+}
+
+func NewCustomWriter() *CustomWriter {
+	return &CustomWriter{
+		mut: new(sync.Mutex),
+	}
+}
 
 type State map[string]interface{}
 
 func (s State) Marshal() []byte {
 	bs, _ := json.Marshal(s)
+	return bs
+}
+func (s State) MarshalIndent() []byte {
+	bs, _ := json.MarshalIndent(s, "", "  ")
 	return bs
 }
 
@@ -46,6 +97,11 @@ type Response struct {
 
 func (r *Response) Marshal() []byte {
 	bs, _ := json.Marshal(r)
+	return bs
+}
+
+func (r *Response) MarshalIndent() []byte {
+	bs, _ := json.MarshalIndent(r, "", "  ")
 	return bs
 }
 
@@ -85,7 +141,7 @@ func (req *Request) BuildSetupHttpRequest() (*http.Request, error) {
 }
 
 func (req *Request) SendRequest(w io.Writer) (*Response, error) {
-	fmt.Fprintf(w, "Posting %s\n", req.Marshal())
+	w.Write(req.MarshalIndent())
 	client := http.Client{}
 	httpRequest, err := req.BuildSetupHttpRequest()
 	if err != nil {
@@ -113,18 +169,20 @@ func (r *Request) Marshal() []byte {
 	return bs
 }
 
+func (r *Request) MarshalIndent() []byte {
+	bs, _ := json.MarshalIndent(r, "", "  ")
+	return bs
+}
+
 func SendSetupRequest() (*Response, error) {
-	file, err := GetOutput("setup")
-	if err != nil {
-		return nil, err
-	}
+	file := NewCustomWriter()
 	request := NewRequest()
 	request.SetupTest = true
 	resp, err := request.SendRequest(file)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Fprintf(file, "Success. Response: %s\n", resp.Marshal())
+	file.Write(resp.MarshalIndent())
 
 	return resp, err
 }
@@ -135,61 +193,57 @@ func SendRequest(state State, w io.Writer) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Fprintf(w, "Inserted: %s\n", resp.LogInsertions())
+	w.Write(resp.MarshalIndent())
 	if resp.HasMore {
-		fmt.Fprintf(w, "Intermediary state: %s\n", resp.State.Marshal())
+		WriteState(&resp.State)
 		return SendRequest(resp.State, w)
 	}
-	fmt.Fprintf(w, "Final state: %s\n", resp.State.Marshal())
+	WriteState(&resp.State)
 	return resp, nil
 }
 
 func SendRequestWithState(state State) (*Response, error) {
-	file, err := GetOutput("request_with_state")
-	if err != nil {
-		return nil, err
-	}
-	return SendRequest(state, file)
+	return SendRequest(state, NewCustomWriter())
 }
 
 func SenInitialdRequest() (*Response, error) {
-	file, err := GetOutput("initial")
-	if err != nil {
-		return nil, err
-	}
-	return SendRequest(NewState(), file)
-}
-
-func GetOutput(fileName string) (io.Writer, error) {
-	if output != "" {
-		return os.Create(fmt.Sprintf("%s/%d_%s.txt", output, time.Now().Unix(), fileName))
-	}
-	return os.Stdout, nil
+	return SendRequest(NewState(), NewCustomWriter())
 }
 
 func init() {
+	callID = fmt.Sprintf("call_%d", time.Now().Unix())
 	// Read the cli inputs
 	flag.StringVar(&endpoint, "endpoint", "http://localhost:8080", "Endpoint to send the requests to")
 	flag.StringVar(&agent, "agent", "mock", "Agent to use in the request.")
 	flag.StringVar(&authorizationToken, "token", "", "Authorization token to use in the request")
-	flag.StringVar(&output, "output", "", "if a path is specified, files will be stored in the output directory. Otherwise standard output will be used")
+	flag.StringVar(&output, "output", "./output", "if a path is specified, files will be stored in the output directory. Otherwise standard output will be used")
+	flag.StringVar(&sessionID, "session-id", fmt.Sprintf("session_%d", time.Now().Unix()), "session ID to use.")
 	flag.StringVar(&secretsStr, "secrets", "{}", "secrets to use in the request")
-	flag.StringVar(&stateStr, "state", "{}", "state to send in the request")
+	flag.StringVar(&stateStr, "state", "", "state to send in the request")
 	flag.BoolVar(&testSetup, "setup", false, "if mentioned, the test setup request will be sent to the endpoint (the one Fivetran uses when the connector is saved the first time.")
 	flag.Parse()
 	// Check if the input secrets is a json. If so, parse it.
 	if err := json.Unmarshal([]byte(secretsStr), &secrets); err != nil {
 		log.Fatalln(err)
 	}
-	// Check if the input state is a json. If so, parse it.
-	if err := json.Unmarshal([]byte(stateStr), &state); err != nil {
-		log.Fatalln(err)
-	}
 	// Create the output foler if mentioned
 	if output != "" {
-		if err := os.MkdirAll(output, os.ModePerm); err != nil {
-			log.Println(err)
+		sessionPath = fmt.Sprintf("%s/%s", output, sessionID)
+		callPath = fmt.Sprintf("%s/%s", sessionPath, callID)
+		log.Printf("Session ID %s\n", sessionID)
+		log.Printf("Call ID %s\n", callID)
+		log.Printf("Writing files to %s\n", callPath)
+		if err := os.MkdirAll(callPath, os.ModePerm); err != nil {
+			log.Fatalln(err)
 		}
+	}
+	// Check if the input state is a json. If so, parse it.
+	if stateStr != "" {
+		if err := json.Unmarshal([]byte(stateStr), &state); err != nil {
+			log.Fatalln(err)
+		}
+	} else {
+		state = ReadState()
 	}
 }
 
@@ -197,11 +251,11 @@ func main() {
 
 	if testSetup {
 		if _, err := SendSetupRequest(); err != nil {
-			log.Println(err)
+			log.Fatalln(err)
 		}
 	} else {
 		if _, err := SendRequestWithState(state); err != nil {
-			log.Println(err)
+			log.Fatalln(err)
 		}
 	}
 }
