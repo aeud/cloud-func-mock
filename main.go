@@ -42,6 +42,7 @@ func ReadState() State {
 		log.Println("Cannot read the state. Initializing to {}.")
 		return NewState()
 	}
+	log.Printf("Current state is: \n%s\n", s.MarshalIndent())
 	file.Close()
 	return s
 }
