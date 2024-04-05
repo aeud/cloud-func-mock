@@ -15,7 +15,7 @@ They actually both work.
 
 ## How to use it
 
-### Send a request using Fivetran's setup convention
+### Send a request using Fivetran's setup convention (first trigger)
 
 ```
 go run main.go --endpoint http://localhost:8080 --setup
@@ -29,6 +29,7 @@ go run main.go --endpoint http://localhost:8080 --setup
 go run main.go \
     --endpoint http://localhost:8080 \
     --secrets '{"key1": "value1"}' \
+    --custom-payload '{"key1": "value1"}' \
     --state '{"key": "value"}'
 ```
 
