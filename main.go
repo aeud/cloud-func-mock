@@ -93,11 +93,12 @@ func NewState() State {
 }
 
 type Response struct {
-	State   State                    `json:"state"`
-	Schema  map[string]interface{}   `json:"schema"`
-	Insert  map[string][]interface{} `json:"insert"`
-	Delete  map[string][]interface{} `json:"delete"`
-	HasMore bool                     `json:"hasMore"`
+	State      State                    `json:"state"`
+	Schema     map[string]interface{}   `json:"schema"`
+	Insert     map[string][]interface{} `json:"insert"`
+	Delete     map[string][]interface{} `json:"delete"`
+	HasMore    bool                     `json:"hasMore"`
+	SoftDelete []string                 `json:"softDelete"`
 }
 
 func (r *Response) Marshal() []byte {
