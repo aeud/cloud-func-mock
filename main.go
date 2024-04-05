@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -125,6 +127,7 @@ type Request struct {
 	Secrets       map[string]interface{} `json:"secrets"`
 	CustomPayload map[string]interface{} `json:"customPayload,omitempty"`
 	SetupTest     bool                   `json:"setup_test,omitempty"`
+	SyncID        string                 `json:"sync_id,omitempty"`
 }
 
 func NewRequest() *Request {
@@ -194,6 +197,7 @@ func SendSetupRequest() (*Response, error) {
 
 func SendRequest(state State, w io.Writer) (*Response, error) {
 	request := NewRequestWithState(state)
+	request.SyncID = uuid.NewString()
 	resp, err := request.SendRequest(w)
 	if err != nil {
 		return nil, err
