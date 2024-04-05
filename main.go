@@ -22,7 +22,9 @@ var (
 	callPath           string
 	sessionPath        string
 	secrets            map[string]interface{}
+	customPayload      map[string]interface{}
 	secretsStr         string
+	customPayloadStr   string
 	state              State
 	stateStr           string
 	testSetup          bool
@@ -118,17 +120,19 @@ func (r *Response) LogInsertions() string {
 }
 
 type Request struct {
-	Agent     string                 `json:"agent"`
-	State     State                  `json:"state"`
-	Secrets   map[string]interface{} `json:"secrets"`
-	SetupTest bool                   `json:"setup_test,omitempty"`
+	Agent         string                 `json:"agent"`
+	State         State                  `json:"state"`
+	Secrets       map[string]interface{} `json:"secrets"`
+	CustomPayload map[string]interface{} `json:"customPayload"`
+	SetupTest     bool                   `json:"setup_test,omitempty"`
 }
 
 func NewRequest() *Request {
 	return &Request{
-		Agent:   agent,
-		Secrets: secrets,
-		State:   NewState(),
+		Agent:         agent,
+		Secrets:       secrets,
+		CustomPayload: customPayload,
+		State:         NewState(),
 	}
 }
 func NewRequestWithState(state State) *Request {
@@ -220,6 +224,7 @@ func init() {
 	flag.StringVar(&output, "output", "./output", "if a path is specified, files will be stored in the output directory. Otherwise standard output will be used")
 	flag.StringVar(&sessionID, "session-id", fmt.Sprintf("session_%d", time.Now().Unix()), "session ID to use.")
 	flag.StringVar(&secretsStr, "secrets", "{}", "secrets to use in the request")
+	flag.StringVar(&customPayloadStr, "custom-payload", "{}", "custom payload. passed the custom payloads into your function every time we call the function.")
 	flag.StringVar(&stateStr, "state", "", "state to send in the request")
 	flag.BoolVar(&testSetup, "setup", false, "if mentioned, the test setup request will be sent to the endpoint (the one Fivetran uses when the connector is saved the first time.")
 	flag.Parse()
@@ -227,7 +232,11 @@ func init() {
 	if err := json.Unmarshal([]byte(secretsStr), &secrets); err != nil {
 		log.Fatalln(err)
 	}
-	// Create the output foler if mentioned
+	// Check if the input customPayload is a json. If so, parse it.
+	if err := json.Unmarshal([]byte(customPayloadStr), &customPayload); err != nil {
+		log.Fatalln(err)
+	}
+	// Create the output folder if mentioned
 	if output != "" {
 		sessionPath = fmt.Sprintf("%s/%s", output, sessionID)
 		callPath = fmt.Sprintf("%s/%s", sessionPath, callID)
