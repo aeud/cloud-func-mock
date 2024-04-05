@@ -123,7 +123,7 @@ type Request struct {
 	Agent         string                 `json:"agent"`
 	State         State                  `json:"state"`
 	Secrets       map[string]interface{} `json:"secrets"`
-	CustomPayload map[string]interface{} `json:"customPayload"`
+	CustomPayload map[string]interface{} `json:"customPayload,omitempty"`
 	SetupTest     bool                   `json:"setup_test,omitempty"`
 }
 
