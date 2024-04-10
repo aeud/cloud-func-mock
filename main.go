@@ -98,7 +98,7 @@ type Response struct {
 	Insert     map[string][]interface{} `json:"insert"`
 	Delete     map[string][]interface{} `json:"delete"`
 	HasMore    bool                     `json:"hasMore"`
-	SoftDelete []string                 `json:"softDelete"`
+	SoftDelete []string                 `json:"softDelete,omitempty"`
 }
 
 func (r *Response) Marshal() []byte {
